@@ -817,8 +817,8 @@ textarea { resize: vertical; min-height: 72px; }
         <thead><tr>
           <th onclick="sortCarteira('name')">Cliente ↕</th>
           <th onclick="sortCarteira('auc')">AuC (R$) ↕</th>
-          <th onclick="sortCarteira('roa')">ROA % ↕</th>
-          <th>Receita/mês</th>
+          <th onclick="sortCarteira('roa')">ROA % a.a. ↕</th>
+          <th>Receita Líq./mês</th>
           <th onclick="sortCarteira('seg')">Segmento ↕</th>
           <th onclick="sortCarteira('since')">Cliente desde ↕</th>
           <th>Ações</th>
@@ -1062,7 +1062,7 @@ textarea { resize: vertical; min-height: 72px; }
       <div class="form-group"><label>Nome *</label><input id="cName" placeholder="Dr. Carlos Mendes"></div>
       <div class="form-group"><label>Empresa / Clínica</label><input id="cCompany" placeholder="Clínica Mendes"></div>
       <div class="form-group"><label>AuC — Patrimônio (R$) *</label><input id="cAuc" type="number" placeholder="1000000"></div>
-      <div class="form-group"><label>ROA Mensal (%)</label><input id="cRoa" type="number" step="0.01" placeholder="0.80"></div>
+      <div class="form-group"><label>ROA Anual Médio (%)</label><input id="cRoa" type="number" step="0.01" placeholder="1.77"></div>
       <div class="form-group"><label>Segmento</label>
         <select id="cSeg"><option value="prime">Private/Prime</option><option value="alta">Alta Renda</option><option value="media">Renda Média</option><option value="varejo">Varejo</option></select>
       </div>
@@ -1139,12 +1139,12 @@ if (!leads.length) {
 
 if (!clientes.length) {
   clientes = [
-    {id:uid(),name:'Dr. Paulo Fernandes',company:'Hospital São Lucas',auc:1200000,roa:0.85,seg:'prime',since:'2025-10',phone:'(11) 97777-2222',email:'paulo@sl.com',notes:'Neurocirurgião. Perfil arrojado.'},
-    {id:uid(),name:'Grupo Almeida',company:'Almeida Construções',auc:3500000,roa:0.75,seg:'prime',since:'2024-06',phone:'(11) 93333-4444',email:'contato@almeida.com',notes:'Holding familiar. Foco em FIIs e RF.'},
-    {id:uid(),name:'Dra. Letícia Rocha',company:'Clínica Derma',auc:680000,roa:0.90,seg:'alta',since:'2025-03',phone:'(11) 92222-5555',email:'leticia@derma.com',notes:'Dermatologista. Ativa no WhatsApp.'},
-    {id:uid(),name:'Carlos Neto',company:'Neto Transportes',auc:420000,roa:0.70,seg:'alta',since:'2025-07',phone:'(11) 91111-6666',email:'carlos@neto.com',notes:'Empresário. Carteira conservadora.'},
-    {id:uid(),name:'Patricia Lima',company:'Autônoma',auc:180000,roa:0.65,seg:'media',since:'2025-11',phone:'(11) 90000-7777',email:'patricia@gmail.com',notes:'Professora universitária. Longo prazo.'},
-    {id:uid(),name:'Rodrigo Pinto',company:'Pinto & Filhos',auc:95000,roa:0.55,seg:'varejo',since:'2026-01',phone:'(11) 98888-0000',email:'rodrigo@pinto.com',notes:'Novo cliente. Ainda em diagnóstico.'},
+    {id:uid(),name:'Dr. Paulo Fernandes',company:'Hospital São Lucas',auc:1200000,roa:1.77,seg:'prime',since:'2025-10',phone:'(11) 97777-2222',email:'paulo@sl.com',notes:'Neurocirurgião. Perfil arrojado.'},
+    {id:uid(),name:'Grupo Almeida',company:'Almeida Construções',auc:3500000,roa:1.50,seg:'prime',since:'2024-06',phone:'(11) 93333-4444',email:'contato@almeida.com',notes:'Holding familiar. Foco em FIIs e RF.'},
+    {id:uid(),name:'Dra. Letícia Rocha',company:'Clínica Derma',auc:680000,roa:1.90,seg:'alta',since:'2025-03',phone:'(11) 92222-5555',email:'leticia@derma.com',notes:'Dermatologista. Ativa no WhatsApp.'},
+    {id:uid(),name:'Carlos Neto',company:'Neto Transportes',auc:420000,roa:1.40,seg:'alta',since:'2025-07',phone:'(11) 91111-6666',email:'carlos@neto.com',notes:'Empresário. Carteira conservadora.'},
+    {id:uid(),name:'Patricia Lima',company:'Autônoma',auc:180000,roa:1.20,seg:'media',since:'2025-11',phone:'(11) 90000-7777',email:'patricia@gmail.com',notes:'Professora universitária. Longo prazo.'},
+    {id:uid(),name:'Rodrigo Pinto',company:'Pinto & Filhos',auc:95000,roa:1.00,seg:'varejo',since:'2026-01',phone:'(11) 98888-0000',email:'rodrigo@pinto.com',notes:'Novo cliente. Ainda em diagnóstico.'},
   ];
   saveC();
 }
@@ -1169,6 +1169,18 @@ function fBRL(v, compact=false) {
   return 'R$ '+n.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0});
 }
 function fDate(d) { if(!d) return '—'; const [y,m,day]=d.split('-'); return `${day}/${m}`; }
+// ── CÁLCULO DE RECEITA LÍQUIDA ──
+// ROA cadastrado = % a.a. (anual) sobre AuC
+// ROA mensal = ROA anual ÷ 12
+// Receita bruta mensal = AuC × (ROA_anual / 12) / 100
+// Imposto (16,5%) incide sobre receita bruta
+// Split escritório (50%) incide sobre receita pós-imposto
+// Receita líquida assessor = bruta × (1 - 0.165) × 0.50
+const IMPOSTO = 0.165;
+const SPLIT   = 0.50;
+function roaMensal(roa)        { return Number(roa||0) / 12; }
+function recBruta(auc, roa)    { return Number(auc||0) * roaMensal(roa) / 100; }
+function recLiquida(auc, roa)  { const b = recBruta(auc,roa); return b * (1 - IMPOSTO) * SPLIT; }
 function fDateFull(d) { if(!d) return '—'; try{ return new Date(d+'T12:00').toLocaleDateString('pt-BR'); }catch{return d;} }
 function isOverdue(d) { if(!d) return false; return new Date(d+'T23:59') < new Date(); }
 function isToday(d) { if(!d) return false; const t=new Date(), x=new Date(d+'T12:00'); return t.toDateString()===x.toDateString(); }
@@ -1212,7 +1224,8 @@ function renderDashboard() {
   const pVal = pipeline.reduce((s,l)=>s+Number(l.value||0),0);
   const wVal = won.reduce((s,l)=>s+Number(l.value||0),0);
   const totalAuC = clientes.reduce((s,c)=>s+Number(c.auc||0),0);
-  const totalRec = clientes.reduce((s,c)=>s+(Number(c.auc||0)*Number(c.roa||0)/100),0);
+  const totalRec = clientes.reduce((s,c)=>s+recLiquida(c.auc,c.roa),0);
+  const totalBruta = clientes.reduce((s,c)=>s+recBruta(c.auc,c.roa),0);
   const roaAvg = clientes.length ? (clientes.reduce((s,c)=>s+Number(c.roa||0),0)/clientes.length).toFixed(2) : 0;
   const hot = leads.filter(l=>l.priority==='alta'&&!['Ganho','Perdido'].includes(l.stage)).length;
 
@@ -1228,7 +1241,7 @@ function renderDashboard() {
       <div class="kpi-sub">${clientes.length} clientes na carteira</div><div style="position:absolute;top:0;left:0;right:0;height:2px;background:#3b82f6"></div></div>
     <div class="kpi"><div class="kpi-icon">💰</div>
       <div class="kpi-label">Receita/mês</div><div class="kpi-value" style="color:var(--gold)">${fBRL(totalRec,true)}</div>
-      <div class="kpi-sub">ROA médio ${roaAvg}%</div><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--gold)"></div></div>
+      <div class="kpi-sub">líq. p/ você · ROA médio ${roaAvg}%</div><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--gold)"></div></div>
   `;
 
   // Charts
@@ -1427,15 +1440,15 @@ function renderAlertSection(title, arr, cls) {
 // ─── CARTEIRA ────────────────────────────────────────────────────
 function renderCarteira() {
   const totalAuC = clientes.reduce((s,c)=>s+Number(c.auc||0),0);
-  const totalRec = clientes.reduce((s,c)=>s+(Number(c.auc||0)*Number(c.roa||0)/100),0);
+  const totalRec = clientes.reduce((s,c)=>s+recLiquida(c.auc,c.roa),0);
   const roaAvg = clientes.length?(clientes.reduce((s,c)=>s+Number(c.roa||0),0)/clientes.length).toFixed(2):0;
   const maxAuC = Math.max(...clientes.map(c=>Number(c.auc||0)),1);
 
   document.getElementById('carteiraKPIs').innerHTML = `
     <div class="kpi"><div class="kpi-icon">💼</div><div class="kpi-label">AuC Total</div><div class="kpi-value" style="color:#60a5fa">${fBRL(totalAuC,true)}</div><div class="kpi-sub">${clientes.length} clientes</div><div style="position:absolute;top:0;left:0;right:0;height:2px;background:#3b82f6"></div></div>
-    <div class="kpi"><div class="kpi-icon">💰</div><div class="kpi-label">Receita/mês</div><div class="kpi-value" style="color:var(--gold)">${fBRL(totalRec,true)}</div><div class="kpi-sub">Estimativa mensal</div><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--gold)"></div></div>
-    <div class="kpi"><div class="kpi-icon">📊</div><div class="kpi-label">ROA Médio</div><div class="kpi-value" style="color:var(--accent)">${roaAvg}%</div><div class="kpi-sub">ao mês</div><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent)"></div></div>
-    <div class="kpi"><div class="kpi-icon">📈</div><div class="kpi-label">Receita Anual</div><div class="kpi-value" style="color:#f97316">${fBRL(totalRec*12,true)}</div><div class="kpi-sub">projeção</div><div style="position:absolute;top:0;left:0;right:0;height:2px;background:#f97316"></div></div>
+    <div class="kpi"><div class="kpi-icon">💰</div><div class="kpi-label">Receita Líq./mês</div><div class="kpi-value" style="color:var(--gold)">${fBRL(totalRec,true)}</div><div class="kpi-sub">líq. p/ você (após split+IR)</div><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--gold)"></div></div>
+    <div class="kpi"><div class="kpi-icon">📊</div><div class="kpi-label">ROA Médio</div><div class="kpi-value" style="color:var(--accent)">${roaAvg}%</div><div class="kpi-sub">a.a. média carteira</div><div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent)"></div></div>
+    <div class="kpi"><div class="kpi-icon">📈</div><div class="kpi-label">Receita Líq./ano</div><div class="kpi-value" style="color:#f97316">${fBRL(totalRec*12,true)}</div><div class="kpi-sub">projeção anual</div><div style="position:absolute;top:0;left:0;right:0;height:2px;background:#f97316"></div></div>
   `;
 
   let data = [...clientes];
@@ -1447,7 +1460,8 @@ function renderCarteira() {
 
   const segClass = {prime:'seg-prime',alta:'seg-alta',media:'seg-media',varejo:'seg-varejo'};
   document.getElementById('carteiraBody').innerHTML = data.map(c=>{
-    const rec = Number(c.auc||0)*Number(c.roa||0)/100;
+    const bruta = recBruta(c.auc, c.roa);
+    const liq   = recLiquida(c.auc, c.roa);
     const pct = Math.min(100,Math.round(Number(c.auc)/maxAuC*100));
     const rColor = Number(c.roa)>=0.80?'#10b981':Number(c.roa)>=0.60?'#f59e0b':'#f43f5e';
     return `<tr onclick="openClienteDetail('${c.id}')">
@@ -1457,10 +1471,13 @@ function renderCarteira() {
         <div class="roa-bar-wrap"><div class="roa-bar-bg"><div class="roa-bar-fill" style="width:${pct}%;background:#3b82f6"></div></div></div>
       </td>
       <td>
-        <div style="font-weight:700;color:${rColor}">${c.roa||'—'}%</div>
-        <div style="font-size:10px;color:var(--muted)">${fBRL(rec)}/mês</div>
+        <div style="font-weight:700;color:${rColor}">${c.roa||'—'}% a.a.</div>
+        <div style="font-size:10px;color:var(--muted)">bruto ${fBRL(bruta,true)}/mês · ROA mensal ${roaMensal(c.roa).toFixed(4)}%</div>
       </td>
-      <td style="color:var(--gold);font-weight:700">${fBRL(rec)}</td>
+      <td>
+        <div style="color:var(--accent);font-weight:700">${fBRL(liq)}</div>
+        <div style="font-size:10px;color:var(--muted)">líq. p/ você</div>
+      </td>
       <td><span class="seg-badge ${segClass[c.seg]||''}">${SEG_LABEL[c.seg]||c.seg}</span></td>
       <td style="color:var(--muted);font-size:12px">${c.since?c.since.replace('-','/'):'—'}</td>
       <td onclick="event.stopPropagation()">
@@ -1478,7 +1495,7 @@ function renderMetricas() {
   destroyChart('chartROA'); destroyChart('chartReceita');
 
   const totalAuC = clientes.reduce((s,c)=>s+Number(c.auc||0),0);
-  const totalRec = clientes.reduce((s,c)=>s+(Number(c.auc||0)*Number(c.roa||0)/100),0);
+  const totalRec = clientes.reduce((s,c)=>s+recLiquida(c.auc,c.roa),0);
   const roaAvg = clientes.length?(clientes.reduce((s,c)=>s+Number(c.roa||0),0)/clientes.length).toFixed(2):0;
   const conv = leads.filter(l=>l.stage==='Ganho').length;
   const total = leads.length;
@@ -1677,15 +1694,27 @@ function openClienteDetail(id) {
   viewingCliente=id;
   const c=clientes.find(x=>x.id===id);
   if(!c)return;
-  const rec=Number(c.auc||0)*Number(c.roa||0)/100;
+  const bruta = recBruta(c.auc, c.roa);
+  const liq   = recLiquida(c.auc, c.roa);
+  const impostoVal = bruta * IMPOSTO;
+  const splitVal   = (bruta - impostoVal) * SPLIT;
   document.getElementById('cDetailName').textContent=c.name;
   document.getElementById('cDetailInfo').innerHTML=`
     <div class="detail-item"><label>Empresa</label><span>${c.company||'—'}</span></div>
     <div class="detail-item"><label>Segmento</label><span>${SEG_LABEL[c.seg]||c.seg}</span></div>
     <div class="detail-item"><label>AuC</label><span style="color:#60a5fa;font-weight:700">${fBRL(c.auc)}</span></div>
-    <div class="detail-item"><label>ROA Mensal</label><span style="color:var(--accent);font-weight:700">${c.roa||'—'}%</span></div>
-    <div class="detail-item"><label>Receita/mês</label><span style="color:var(--gold);font-weight:700">${fBRL(rec)}</span></div>
-    <div class="detail-item"><label>Receita/ano</label><span style="color:var(--gold)">${fBRL(rec*12)}</span></div>
+    <div class="detail-item"><label>ROA Médio Anual</label><span style="color:var(--accent);font-weight:700">${c.roa||'—'}% a.a.</span></div>
+    <div class="detail-item" style="grid-column:1/-1;background:var(--surface2);border-radius:8px;padding:12px;margin-top:4px">
+      <label style="display:block;margin-bottom:8px">📊 Breakdown da Receita</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;font-size:12px">
+        <div><div style="color:var(--muted);font-size:10px;margin-bottom:2px">Bruta</div><div style="font-weight:700">${fBRL(bruta)}</div></div>
+        <div><div style="color:var(--muted);font-size:10px;margin-bottom:2px">Imposto (16,5%)</div><div style="color:var(--danger);font-weight:700">- ${fBRL(impostoVal)}</div></div>
+        <div><div style="color:var(--muted);font-size:10px;margin-bottom:2px">Split escritório (50%)</div><div style="color:var(--danger);font-weight:700">- ${fBRL(splitVal)}</div></div>
+        <div><div style="color:var(--muted);font-size:10px;margin-bottom:2px">💰 Líquido p/ você</div><div style="color:var(--accent);font-weight:800;font-size:14px">${fBRL(liq)}</div></div>
+      </div>
+    </div>
+    <div class="detail-item"><label>Receita Líq./mês</label><span style="color:var(--accent);font-weight:700;font-size:16px">${fBRL(liq)}</span></div>
+    <div class="detail-item"><label>Receita Líq./ano</label><span style="color:var(--gold);font-weight:700">${fBRL(liq*12)}</span></div>
     <div class="detail-item"><label>WhatsApp</label><span>${c.phone?`<a href="https://wa.me/55${c.phone.replace(/\D/g,'')}" target="_blank" style="color:var(--accent)">${c.phone}</a>`:'—'}</span></div>
     <div class="detail-item"><label>Email</label><span>${c.email||'—'}</span></div>
     <div class="detail-item"><label>Cliente desde</label><span>${c.since?c.since.replace('-','/'):'—'}</span></div>
@@ -1726,7 +1755,7 @@ document.querySelectorAll('.overlay').forEach(el=>el.addEventListener('click',e=
 function exportCSV() {
   if (currentPage==='carteira') {
     const h=['Nome','Empresa','AuC','ROA%','Receita/mês','Segmento','Desde'];
-    const rows=clientes.map(c=>[c.name,c.company,c.auc,c.roa,(Number(c.auc||0)*Number(c.roa||0)/100).toFixed(0),SEG_LABEL[c.seg],c.since].map(v=>`"${(v||'').toString().replace(/"/g,'""')}"`));
+    const rows=clientes.map(c=>[c.name,c.company,c.auc,c.roa+'% a.m.',fBRL(recBruta(c.auc,c.roa)),fBRL(recLiquida(c.auc,c.roa)),SEG_LABEL[c.seg],c.since].map(v=>`"${(v||'').toString().replace(/"/g,'""')}"`));
     dlCSV([h,...rows],'carteira.csv');
   } else {
     const h=['Nome','Empresa','Etapa','Potencial','Nicho','Origem','Prioridade','Próx Ação','Obs'];
@@ -1767,9 +1796,9 @@ function downloadTemplate(type) {
   } else {
     headers = ['nome','empresa','auc','roa','segmento','desde','telefone','email','observacoes'];
     rows = [
-      ['Dr. Paulo Costa','Hospital ABC','1500000','0.85','prime','2025-06','(11) 99999-0000','paulo@hospital.com','Neurocirurgião. Perfil arrojado.'],
-      ['Ana Lima','Lima Distribuidora','450000','0.75','alta','2025-10','(11) 88888-1111','ana@lima.com','Empresária. Carteira moderada.'],
-      ['Roberto Souza','Autônomo','120000','0.60','media','2026-01','','roberto@gmail.com',''],
+      ['Dr. Paulo Costa','Hospital ABC','1500000','1.80','prime','2025-06','(11) 99999-0000','paulo@hospital.com','Neurocirurgião. Perfil arrojado.'],
+      ['Ana Lima','Lima Distribuidora','450000','1.50','alta','2025-10','(11) 88888-1111','ana@lima.com','Empresária. Carteira moderada.'],
+      ['Roberto Souza','Autônomo','120000','1.20','media','2026-01','','roberto@gmail.com',''],
     ];
   }
   const csv = [headers, ...rows].map(r => r.map(v=>`"${v}"`).join(',')).join('\n');
@@ -1937,7 +1966,7 @@ function showClientesPreview(rows, filename) {
       <td>${r.company||'—'}</td>
       <td style="color:#60a5fa;font-weight:700">${r.auc?fBRL(r.auc,true):'—'}</td>
       <td style="color:var(--accent)">${r.roa||'—'}%</td>
-      <td style="color:var(--gold)">${r.auc&&r.roa?fBRL(r.auc*r.roa/100,true):'—'}</td>
+      <td style="color:var(--gold)">${r.auc&&r.roa?fBRL(recLiquida(r.auc,r.roa),true)+' líq.':'—'}</td>
       <td>${SEG_LABEL2[r.seg]||r.seg}</td>
     </tr>`).join('')}</tbody>`;
 
