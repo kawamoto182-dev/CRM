@@ -714,6 +714,9 @@ textarea { resize: vertical; min-height: 72px; }
   <div class="topbar">
     <div class="page-title" id="pageTitle">Dashboard</div>
     <div class="topbar-right">
+      <button class="btn btn-ghost" onclick="backupData()" style="padding:7px 14px;font-size:12px" title="Fazer backup dos seus dados">💾 Backup</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('restoreFile').click()" style="padding:7px 14px;font-size:12px" title="Restaurar backup">♻️ Restaurar</button>
+      <input type="file" id="restoreFile" accept=".json" style="display:none" onchange="restoreData(event)">
       <button class="btn btn-ghost" onclick="exportCSV()" style="padding:7px 14px;font-size:12px">⬇ CSV</button>
       <button class="btn btn-ghost" onclick="showPage('upload')" style="padding:7px 14px;font-size:12px">📥 Importar</button>
       <button class="btn btn-primary" onclick="openAddLead()" id="btnAddLead">+ Novo Lead</button>
@@ -761,9 +764,6 @@ textarea { resize: vertical; min-height: 72px; }
       </select>
       <select id="filterTag" onchange="renderPipeline()" style="width:auto">
         <option value="">Todos os nichos</option>
-        <option value="médico">Médico</option>
-        <option value="empresário">Empresário</option>
-        <option value="profissional">Profissional Liberal</option>
       </select>
       <div class="view-toggle">
         <button class="vbtn active" id="btnKanban" onclick="setPipeView('kanban')">Kanban</button>
@@ -996,7 +996,9 @@ textarea { resize: vertical; min-height: 72px; }
         <select id="lStage"><option>Prospecção</option><option>Contato Feito</option><option>Reunião Agendada</option><option>Proposta Enviada</option><option>Ganho</option><option>Perdido</option></select>
       </div>
       <div class="form-group"><label>Nicho</label>
-        <select id="lTag"><option value="">—</option><option value="médico">Médico</option><option value="empresário">Empresário</option><option value="profissional">Profissional Liberal</option></select>
+        <select id="lTag" style="display:none"></select>
+        <input id="lTagInput" placeholder="Ex: Agro, Médico, Farmacêutico..." list="nichosList">
+        <datalist id="nichosList"></datalist>
       </div>
       <div class="form-group"><label>Origem</label>
         <select id="lOrigin"><option value="">—</option><option value="indicação">Indicação</option><option value="evento">Evento</option><option value="linkedin">LinkedIn</option><option value="prospecção ativa">Prospecção Ativa</option></select>
@@ -1152,6 +1154,54 @@ if (!clientes.length) {
 function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
 function save() { localStorage.setItem('pf2_leads', JSON.stringify(leads)); }
 function saveC() { localStorage.setItem('pf2_clientes', JSON.stringify(clientes)); }
+
+// ── NICHO DINÂMICO ───────────────────────────────────────────────
+const TAG_PALETTE = [
+  {bg:'rgba(139,92,246,0.2)',  color:'#a78bfa'},
+  {bg:'rgba(245,158,11,0.2)',  color:'#fbbf24'},
+  {bg:'rgba(59,130,246,0.2)',  color:'#60a5fa'},
+  {bg:'rgba(0,229,180,0.15)',  color:'#00e5b4'},
+  {bg:'rgba(249,115,22,0.2)',  color:'#fb923c'},
+  {bg:'rgba(236,72,153,0.2)',  color:'#f472b6'},
+  {bg:'rgba(16,185,129,0.2)',  color:'#34d399'},
+  {bg:'rgba(244,63,94,0.2)',   color:'#fb7185'},
+  {bg:'rgba(14,165,233,0.2)',  color:'#38bdf8'},
+  {bg:'rgba(168,85,247,0.2)',  color:'#c084fc'},
+];
+
+function getAllNichos() {
+  const set = new Set();
+  leads.forEach(l => { if(l.tag && l.tag.trim()) set.add(l.tag.trim()); });
+  return [...set].sort();
+}
+
+function tagColor(tag) {
+  if (!tag) return {bg:'rgba(90,122,154,0.2)', color:'#5a7a9a'};
+  const nichos = getAllNichos();
+  const idx = nichos.indexOf(tag) % TAG_PALETTE.length;
+  return TAG_PALETTE[Math.abs(idx)] || TAG_PALETTE[0];
+}
+
+function tagHTML(tag) {
+  if (!tag) return '';
+  const {bg, color} = tagColor(tag);
+  return `<span class="tag" style="background:${bg};color:${color}">${tag}</span>`;
+}
+
+function refreshNichoFilter() {
+  const nichos = getAllNichos();
+  const sel = document.getElementById('filterTag');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Todos os nichos</option>' +
+    nichos.map(n => `<option value="${n}"${n===cur?' selected':''}>${n}</option>`).join('');
+}
+
+function refreshNichoDatalist() {
+  const nichos = getAllNichos();
+  const dl = document.getElementById('nichosList');
+  if (dl) dl.innerHTML = nichos.map(n=>`<option value="${n}">`).join('');
+}
 function toast(msg, type='success') {
   const el = document.getElementById('toast');
   el.className = `toast ${type}`;
@@ -1265,11 +1315,12 @@ function renderDashboard() {
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#5a7a9a',font:{size:10},padding:10}}}}
   });
 
-  const nichos = ['médico','empresário','profissional'];
+  const nichos = getAllNichos();
   const nCount = nichos.map(n=>leads.filter(l=>l.tag===n).length);
+  const nColors = nichos.map((_,i)=>TAG_PALETTE[i % TAG_PALETTE.length].color);
   charts.chartNicho = new Chart(document.getElementById('chartNicho'), {
     type:'doughnut',
-    data:{labels:['Médico','Empresário','Profissional Liberal'],datasets:[{data:nCount,backgroundColor:['#8b5cf6','#f59e0b','#3b82f6'],borderWidth:0}]},
+    data:{labels:nichos.length?nichos:['Sem dados'],datasets:[{data:nichos.length?nCount:[1],backgroundColor:nichos.length?nColors:['#1e3050'],borderWidth:0}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#5a7a9a',font:{size:10},padding:10}}}}
   });
 
@@ -1326,6 +1377,7 @@ function renderPipeline() {
 }
 
 function renderKanban() {
+  refreshNichoFilter();
   const filtered = getFiltered();
   const board = document.getElementById('pipelineBoard');
   board.innerHTML = '';
@@ -1348,13 +1400,13 @@ function renderKanban() {
 }
 
 function cardHTML(l) {
-  const tags = [l.tag,l.origin].filter(Boolean);
+  const tags = [l.tag, l.origin].filter(Boolean);
   const od = isOverdue(l.nextAction);
   return `<div class="card" onclick="openDetail('${l.id}')">
     <div class="card-stripe" style="background:${SCOLORS[l.stage]}"></div>
     <div class="card-name">${l.name}</div>
     ${l.company?`<div class="card-company">🏢 ${l.company}</div>`:''}
-    ${tags.length?`<div class="card-tags">${tags.map(t=>`<span class="tag tag-${t}">${t}</span>`).join('')}</div>`:''}
+    ${tags.length?`<div class="card-tags">${tagHTML(l.tag)}${l.origin?`<span class="tag" style="background:rgba(0,229,180,0.1);color:var(--accent)">${l.origin}</span>`:''}</div>`:''}
     <div class="card-foot">
       <span class="card-val">${fBRL(l.value,true)}</span>
       <div style="display:flex;align-items:center;gap:6px">
@@ -1554,7 +1606,7 @@ function openAddLead(stage='Prospecção') {
   ['lName','lCompany','lPhone','lEmail','lNotes','lNext'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('lValue').value='';
   document.getElementById('lStage').value=stage;
-  document.getElementById('lTag').value='';
+  document.getElementById('lTagInput').value=''; refreshNichoDatalist();
   document.getElementById('lOrigin').value='';
   document.getElementById('lPriority').value='média';
   document.getElementById('modalLead').classList.add('open');
@@ -1569,7 +1621,7 @@ function saveLead() {
     email:document.getElementById('lEmail').value.trim(),
     value:document.getElementById('lValue').value,
     stage:document.getElementById('lStage').value,
-    tag:document.getElementById('lTag').value,
+    tag:document.getElementById('lTagInput').value.trim(),
     origin:document.getElementById('lOrigin').value,
     priority:document.getElementById('lPriority').value,
     nextAction:document.getElementById('lNext').value,
@@ -1598,7 +1650,7 @@ function openDetail(id) {
     <div class="detail-item"><label>Potencial</label><span style="color:var(--accent);font-weight:700">${fBRL(l.value)}</span></div>
     <div class="detail-item"><label>WhatsApp</label><span>${l.phone?`<a href="https://wa.me/55${l.phone.replace(/\D/g,'')}" target="_blank" style="color:var(--accent)">${l.phone}</a>`:'—'}</span></div>
     <div class="detail-item"><label>Email</label><span>${l.email||'—'}</span></div>
-    <div class="detail-item"><label>Nicho</label><span>${l.tag||'—'}</span></div>
+    <div class="detail-item"><label>Nicho</label><span>${l.tag?tagHTML(l.tag):'—'}</span></div>
     <div class="detail-item"><label>Origem</label><span>${l.origin||'—'}</span></div>
     <div class="detail-item"><label>Prioridade</label><span><span class="pdot pdot-${l.priority}"></span> ${l.priority||'—'}</span></div>
     <div class="detail-item"><label>Próxima Ação</label><span style="${isOverdue(l.nextAction)?'color:var(--danger);font-weight:700':''}">${l.nextAction?fDateFull(l.nextAction)+''+( isOverdue(l.nextAction)?' ⚠️':''):'—'}</span></div>
@@ -1641,7 +1693,7 @@ function editLead() {
   document.getElementById('lEmail').value=l.email||'';
   document.getElementById('lValue').value=l.value||'';
   document.getElementById('lStage').value=l.stage||'Prospecção';
-  document.getElementById('lTag').value=l.tag||'';
+  document.getElementById('lTagInput').value=l.tag||''; refreshNichoDatalist();
   document.getElementById('lOrigin').value=l.origin||'';
   document.getElementById('lPriority').value=l.priority||'média';
   document.getElementById('lNext').value=l.nextAction||'';
@@ -1770,6 +1822,42 @@ function dlCSV(rows,name) {
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
 }
 
+// ─── BACKUP / RESTORE ────────────────────────────────────────────
+function backupData() {
+  const data = {
+    version: '2.1',
+    date: new Date().toISOString(),
+    leads, clientes, importHistory
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `prospectflow_backup_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.json`;
+  a.click();
+  toast('💾 Backup salvo!');
+}
+
+function restoreData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!data.leads && !data.clientes) { toast('Arquivo inválido!', 'info'); return; }
+      if (!confirm(`Restaurar backup de ${new Date(data.date).toLocaleDateString('pt-BR')}?\n${data.leads?.length||0} leads e ${data.clientes?.length||0} clientes.\n\nIsso substituirá os dados atuais.`)) return;
+      if (data.leads) { leads = data.leads; save(); }
+      if (data.clientes) { clientes = data.clientes; saveC(); }
+      if (data.importHistory) { importHistory = data.importHistory; saveImportHistory(); }
+      renderPage(currentPage);
+      updateBadge();
+      toast(`✅ Backup restaurado! ${leads.length} leads, ${clientes.length} clientes.`);
+    } catch(err) { toast('Erro ao ler o arquivo!', 'info'); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
 // ─── IMPORT SYSTEM ───────────────────────────────────────────────
 let importHistory = JSON.parse(localStorage.getItem('pf2_imports')||'[]');
 let pendingImport = { type: null, data: [] };
@@ -1830,9 +1918,16 @@ function handleFile(e, type) {
 function parseCSV(text) {
   const lines = text.trim().split(/\r?\n/);
   if (lines.length < 2) return { headers: [], rows: [] };
-  const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim().replace(/\s+/g,'_').normalize('NFD').replace(/[\u0300-\u036f]/g,''));
+  // Auto-detect delimiter: semicolon or comma
+  const firstLine = lines[0];
+  const delimiter = (firstLine.split(';').length >= firstLine.split(',').length) ? ';' : ',';
+  const headers = parseCSVLine(lines[0], delimiter).map(h =>
+    h.toLowerCase().trim()
+      .replace(/\s+/g,'_')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+  );
   const rows = lines.slice(1).filter(l=>l.trim()).map(l => {
-    const vals = parseCSVLine(l);
+    const vals = parseCSVLine(l, delimiter);
     const obj = {};
     headers.forEach((h,i) => obj[h] = (vals[i]||'').trim());
     return obj;
@@ -1840,13 +1935,13 @@ function parseCSV(text) {
   return { headers, rows };
 }
 
-function parseCSVLine(line) {
+function parseCSVLine(line, delimiter=',') {
   const result = [];
   let cur = '', inQ = false;
   for (let i = 0; i < line.length; i++) {
     const c = line[i];
     if (c === '"') { inQ = !inQ; continue; }
-    if (c === ',' && !inQ) { result.push(cur); cur = ''; continue; }
+    if (c === delimiter && !inQ) { result.push(cur); cur = ''; continue; }
     cur += c;
   }
   result.push(cur);
@@ -1860,12 +1955,29 @@ function processCSVFile(file, type) {
     let text = e.target.result;
     // Remove BOM if present
     if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    // Normalize Windows line endings
+    text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     const { headers, rows } = parseCSV(text);
     if (!rows.length) { toast('Arquivo vazio ou inválido!', 'info'); return; }
     if (type === 'leads') showLeadsPreview(rows, file.name);
     else showClientesPreview(rows, file.name);
   };
-  reader.readAsText(file, 'UTF-8');
+  reader.onerror = () => {
+    // Retry with latin1 if UTF-8 fails
+    const r2 = new FileReader();
+    r2.onload = e => {
+      let text = e.target.result;
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+      text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      const { rows } = parseCSV(text);
+      if (type === 'leads') showLeadsPreview(rows, file.name);
+      else showClientesPreview(rows, file.name);
+    };
+    r2.readAsText(file, 'latin1');
+  };
+  // Try UTF-8 first, fallback to latin1
+  try { reader.readAsText(file, 'UTF-8'); }
+  catch(e) { reader.readAsText(file, 'latin1'); }
 }
 
 // ── LEADS PREVIEW ────────────────────────────────────────────────
@@ -1882,7 +1994,7 @@ function showLeadsPreview(rows, filename) {
       name, company: r.empresa || r.company || '',
       phone: r.telefone || r.phone || r.tel || '',
       email: r.email || r.e_mail || '',
-      value: Number((r.potencial||r.value||r.valor||'0').replace(/[^\d.]/g,'')),
+      value: cleanNumber(r.potencial||r.value||r.valor||''),
       stage, priority,
       tag: mapTag(r.nicho || r.tag || r.segmento_lead || ''),
       origin: r.origem || r.origin || '',
@@ -1933,7 +2045,7 @@ function showClientesPreview(rows, filename) {
     const errors = [];
     const name = r.nome || r.name || r.cliente || '';
     if (!name) errors.push('nome obrigatório');
-    const auc = Number((r.auc||r.patrimonio||r['auc_r$']||'0').replace(/[^\d.]/g,''));
+    const auc = cleanNumber(r.auc||r.patrimonio||r['auc_r$']||'');
     if (!auc) errors.push('AuC obrigatório');
     const seg = SEG_MAP[(r.segmento||r.seg||'').toLowerCase().trim()] || 'media';
     return {
@@ -2047,30 +2159,32 @@ function renderImportHistory() {
     </div>`).join('');
 }
 
-// ── HELPERS ──────────────────────────────────────────────────────
+function cleanNumber(v) {
+  // Handles: "R$ 100.000,00" / "100000" / "100.000" / "R$ -" / "-" / ""
+  if (!v) return 0;
+  const s = v.toString().replace(/R\$\s*/g,'').replace(/\./g,'').replace(',','.').replace(/[^\d.]/g,'').trim();
+  return parseFloat(s) || 0;
+}
 function mapStage(v) {
-  const s = (v||'').toLowerCase().trim();
+  const s = (v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
   if (s.includes('gan') || s.includes('won') || s.includes('capt')) return 'Ganho';
   if (s.includes('perd') || s.includes('lost')) return 'Perdido';
-  if (s.includes('prop') || s.includes('propo')) return 'Proposta Enviada';
-  if (s.includes('reuni') || s.includes('meet')) return 'Reunião Agendada';
-  if (s.includes('cont')) return 'Contato Feito';
+  if (s.includes('prop')) return 'Proposta Enviada';
+  if (s.includes('reuni') || s.includes('meet') || s.includes('agend')) return 'Reunião Agendada';
+  if (s.includes('cont') || s.includes('feito') || s.includes('feit')) return 'Contato Feito';
   return 'Prospecção';
 }
 
 function mapPriority(v) {
-  const s = (v||'').toLowerCase().trim();
-  if (s.includes('alt') || s.includes('high') || s === '3') return 'alta';
-  if (s.includes('baix') || s.includes('low') || s === '1') return 'baixa';
+  const s = (v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+  if (s.includes('alt') || s.includes('high') || s==='3') return 'alta';
+  if (s.includes('baix') || s.includes('low') || s==='1') return 'baixa';
   return 'média';
 }
 
 function mapTag(v) {
-  const s = (v||'').toLowerCase().trim();
-  if (s.includes('méd') || s.includes('med') || s.includes('doc')) return 'médico';
-  if (s.includes('emp') || s.includes('busi')) return 'empresário';
-  if (s.includes('prof') || s.includes('lib')) return 'profissional';
-  return v;
+  if (!v || v==='-' || v==='n/a' || v==='N/A') return '';
+  return v.trim();
 }
 
 // ─── INIT ────────────────────────────────────────────────────────
